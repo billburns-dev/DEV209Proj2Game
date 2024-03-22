@@ -1,150 +1,285 @@
-// Initialization ************************************************************* START
-// Create the canvas
-let canvas = document.createElement("canvas");
-let ctx = canvas.getContext("2d");
-canvas.width = 512;
-canvas.height = 480;
-document.body.appendChild(canvas);
+/*  Abbreviations Used:
+    BMR   Basal Metabolic Rate                    PAL   Physical Activity Level
+    TDEE  Total Daily Energy Expenditure          TDCI  Total Daily Caloric Intake
+    DEBD  Daily Energy Balance Delta
+*/
 
-// Background image
-let bgReady = false;
-let bgImage = new Image();
-bgImage.onload = function () {
-  bgReady = true;
-};
+let energyBalanceArray = [];  // array of objects
+let selectedGender = "not selected";
+let selectedPal = "not selected";
 
-bgImage.src = "images/background.png";
-
-// Hero image
-let heroReady = false;
-let heroImage = new Image();
-heroImage.onload = function () {
-  heroReady = true;
-};
-
-heroImage.src = "images/hero.png";
-
-// Monster image
-let monsterReady = false;
-let monsterImage = new Image();
-monsterImage.onload = function () {
-  monsterReady = true;
-};
-
-monsterImage.src = "images/monster.png";
-
-// Initialization ************************************************************* END
-
-// Game objects
-let hero = {
-  speed: 256, // movement in pixels per second
-  x: 0,  // where on the canvas are they?
-  y: 0  // where on the canvas are they?
-};
-let monster = {
-// for this version, the monster does not move, so just and x and y
-  x: 0,
-  y: 0
-};
-let monstersCaught = 0;
-
-
-// ************* done creating other variables ********************
-
-// Handle keyboard controls
-let keysDown = {}; //object were we properties when keys go down
-                // and then delete them when the key goes up
-// so the object tells us if any key is down when that keycode
-// is down.  In our game loop, we will move the hero image if when
-// we go thru render, a key is down
-
-addEventListener("keydown", function (e) {
-    keysDown[e] = true;
-}, false);
-
-addEventListener("keyup", function (e) {
-    delete keysDown[e];
-}, false);
-
-
-// Update game objects
-let update = function (modifier) {
-  if (38 in keysDown && hero.y > 32+0) { //  holding up key
-    hero.y -= hero.speed * modifier;
-  }
-  if (40 in keysDown && hero.y < canvas.height - (64 + 0)) { //  holding down key
-    hero.y += hero.speed * modifier;
-  }
-  if (37 in keysDown && hero.x > (32+0)) { // holding left key
-    hero.x -= hero.speed * modifier;
-  }
-  if (39 in keysDown && hero.x < canvas.width - (64 +0)) { // holding right key
-    hero.x += hero.speed * modifier;
-  }
+// define energy balance object constructor
+let EnergyBalanceObject = function (pentryDate, pgender, page, pheight, pweight, pbmr, ppal, ptdee, pproteinCalories, pcarboCalories, pfatCalories, ptdci, pdebd) {
+    this.entryDate = pentryDate;
+    this.gender = pgender;
+    this.age = page; 
+    this.height = pheight;
+    this.weight = pweight;
+    this.bmr = pbmr;
+    this.pal = ppal;
+    this.tdee = ptdee;
+    this.proteinCalories = pproteinCalories;
+    this.carboCalories = pcarboCalories;
+    this.fatCalories = pfatCalories;
+    this.tdci = ptdci;
+    this.debd = pdebd;
+    this.ID = Math.floor(Math.random()*500) + 1;
 }
 
-  // Are they touching?
-  if (
-    hero.x <= (monster.x + 32)
-    && monster.x <= (hero.x + 32)
-    && hero.y <= (monster.y + 32)
-    && monster.y <= (hero.y + 32)
-) {
-    ++monstersCaught;       // keep track of our “score”
-    console.log("got him")
-    reset();       // start a new cycle
+// wait for "DOMContentLoaded" event **************************************************** START
+document.addEventListener("DOMContentLoaded", function () {
+
+  // on "save-entry" click, store app data (user input & calculated) ******************** START
+  document.getElementById("save-entry").addEventListener("click", function () {
+
+    // selected entry date (col 1|row 1) converted to mm/dd/yyyy format
+    let convertedEntryDate = convertDatemmddyyyy(new Date(document.getElementById("selected-entry-date").value));
+    
+    // selected PAL (col 2|row 1)
+    selectedPal = document.getElementById("selected-pal").value;
+
+    // calories consumed on entry date; categorized and entered by user; protein (col 1|row 2), carbohydrates (col 2|row 2), fat (col 3|row 2)
+    let enteredProteinCalories = parseInt(document.getElementById("entered-protein-calories").value);
+    let enteredCarboCalories = parseInt(document.getElementById("entered-carbo-calories").value);
+    let enteredFatCalories = parseInt(document.getElementById("entered-fat-calories").value);
+    
+    // selected gender (col 1|row 3)
+    selectedGender = document.getElementById("selected-gender").value;
+    
+    // entered age (col 1|row 4), height (col 2|row 4), & weight (col 3|row 4)
+    let enteredAge = document.getElementById("entered-age").value;
+    let enteredHeight = document.getElementById("entered-height").value;
+    let enteredWeight = document.getElementById("entered-weight").value;
+
+    // calculated "energy balance" components (BMR,TDEE, TDCI, DEBD) ********** START
+    
+    // calculate BMR
+    let calculatedBmr = calculateBmr(selectedGender, enteredAge, enteredHeight, enteredWeight);
+    
+    // calculate TDEE as BMR x PAL
+    let calculatedTdee = calculateTdee(calculatedBmr, selectedPal);
+    
+    // calculate TDCI as protein calories + carbohydrate calories + fat calories
+    let calculatedTdci = calculateTdci(enteredProteinCalories, enteredCarboCalories, enteredFatCalories);
+console.log("after function call to calculateTdci; before return: calculatedTdci = ", calculatedTdci);
+
+    // calculate DEBD as TDCI - TDEE
+    let calculatedDebd = calculateDebd(calculatedTdci, calculatedTdee);
+    
+    // calculated "energy balance" components (BMR,TDEE, TDCI, DEBD) ********** END
+
+    // push data from user into object **************************************** START 
+    energyBalanceArray.push(new EnergyBalanceObject(
+      convertedEntryDate,                                   // converted
+      selectedGender,                                       // selected
+      enteredAge,                                           // entered
+      enteredHeight,                                        // entered
+      enteredWeight,                                        // entered
+      calculatedBmr,                                        // calculated
+      selectedPal,                                          // selected
+      calculatedTdee,                                       // calculated
+      enteredProteinCalories,                               // entered
+      enteredCarboCalories,                                 // entered
+      enteredFatCalories,                                   // entered
+      calculatedTdci,                                       // calculated
+      calculatedDebd                                        // calculated    
+    ));
+    // push data from user into object **************************************** END
+
+    alert(`Your entry has been saved in your log.
+To view your entry, click \"Display Log\".
+To add another entry, update your information and click \"Save Log Entry\".`);
+
+console.log("eBA: inside 'save-entry' click; after alert()", energyBalanceArray);
+
+  });
+  // on "save-entry" click, store app data (user input & calculated) ******************** END
+
+console.log("eBA: outside 'save-entry' click", energyBalanceArray);
+  
+  // detect link click event via "class"; when detected dynamic grid build starts ******* START
+  let elementsWithTheClass = document.querySelectorAll(".display-log-link");
+  elementsWithTheClass.forEach(function(element) {
+    element.addEventListener("click", function(event) {
+      
+      console.log("link with class of 'display-log-link' clicked");
+      
+      displayLogContent();
+      
+    });
+  });
+  // detect link click event via "class"; when detected dynamic grid build starts ******* END
+
+});  
+// wait for "DOMContentLoaded" event **************************************************** END
+
+
+console.log("hey I am outside 'wait for DOM load'");
+console.log("eBA after DOM loaded (line ??):", energyBalanceArray);
+
+// function displayLogContent *********************************************************** START
+function displayLogContent() {
+
+  document.getElementById("log-grid").innerHTML = "";
+  let logGrid = document.getElementById("log-grid");
+  
+  // create column header row (grid row 1 | col 1-4)
+  let headerRow = document.createElement('div');
+  headerRow.className = 'ui-grid-c';
+  headerRow.innerHTML = '<div class="ui-block-a"><strong>Entry Date</strong></div>' +
+  '<div class="ui-block-b"><strong>TDEE</strong></div>' +
+  '<div class="ui-block-c"><strong>TDCI</strong></div>' +
+  '<div class="ui-block-d"><strong>DEBD</strong></div>';
+  
+  // append newly created header row to element with id="log-grid"
+  logGrid.appendChild(headerRow);
+
+console.log("eBA after header row appended & before 'energyBalanceArray.forEach' : ", energyBalanceArray);
+
+  // Iterate through energyBalanceArray; create new row & append ************** START
+  energyBalanceArray.forEach(function(ebaObject) {
+    let dataRow = document.createElement('div');
+   
+    dataRow.className = 'ui-grid-c';
+
+
+console.log("inside'energyBalanceArray.forEach'; before objects of ebaObject are used: energyBalanceArray[0].tdee = ", energyBalanceArray[0].tdee);
+console.log("inside'energyBalanceArray.forEach'; before objects of ebaObject are used: energyBalanceArray[0].tdee.value = ", energyBalanceArray[0].tdee.value);
+
+console.log("inside'energyBalanceArray.forEach'; before objects of ebaObject are used: energyBalanceArray[0].tdci = ", energyBalanceArray[0].tdci);
+console.log("inside'energyBalanceArray.forEach'; before objects of ebaObject are used: energyBalanceArray[0].tdci.value = ", energyBalanceArray[0].tdci.value);
+
+console.log("inside'energyBalanceArray.forEach'; before objects of ebaObject are used: ebaObject = ", ebaObject);
+console.log("inside'energyBalanceArray.forEach'; before objects of ebaObject are used: ebaObject.tdic = ", ebaObject.tdic);
+console.log("inside'energyBalanceArray.forEach'; before objects of ebaObject are used: ebaObject.tdee = ", ebaObject.tdee);
+
+  
+    // Create a link with entryDate as parameter
+    let link = document.createElement('a');
+    link.href = '#display-entry';
+    link.className = 'entry-date';
+    link.setAttribute('data-entrydate', ebaObject.entryDate);
+    link.textContent = ebaObject.entryDate;
+
+console.log("inside'energyBalanceArray.forEach'; after link created before link appended: link = ", link);
+
+    // create column cell for entryDate; object value & link to #display-entry
+    let cellA = document.createElement('div');
+    cellA.className = 'ui-block-a';
+    cellA.appendChild(link);
+    
+    // create column cell for tdee; object value
+    let cellB = document.createElement('div');
+    cellB.className = 'ui-block-b';
+    cellB.textContent = ebaObject.tdee;
+    
+    // create column cell for tdic; object value
+    let cellC = document.createElement('div');
+    cellC.className = 'ui-block-c';
+    
+console.log("inside'energyBalanceArray.forEach'; inside create tdic cell: ebaObject.tdic = ", ebaObject.tdic);
+
+    cellC.textContent = ebaObject.tdic;
+
+    // create column cell for debd; object value
+    let cellD = document.createElement('div');
+    cellD.className = 'ui-block-d';
+    cellD.textContent = ebaObject.debd;
+
+    // put cells together to form row
+    dataRow.appendChild(cellA);
+    dataRow.appendChild(cellB);
+    dataRow.appendChild(cellC);
+    dataRow.appendChild(cellD);
+    
+    // append data row
+    logGrid.appendChild(dataRow);
+    
+    console.log("inside but bottom of 'energyBalanceArray.forEach': link = ", link);
+
+    
+  });
+  // Iterate through energyBalanceArray; create new row & append ************** END
+
+
+
+
+/*
+  // trap "entryDate" click on Display Log page ******************************* START
+  link.addEventListener('click', function(event) {
+    
+console.log("eBA after header row appended & before 'energyBalanceArray.forEach' : ", energyBalanceArray);
+
+    localStorage.setItem("entryDate", ebaObject.entryDate);
+    displayEntryDetails(); // redirect to the "Display Specified Log Entry" page 
+  });
+  // trap "entryDate" click on Display Log page ******************************* END
+ */
+ 
 }
+// function displayLogContent *********************************************************** END
 
-
-
-// Draw everything in the main render function
-let render = function () {
-  if (bgReady) {
-    console.log('here2');
-    ctx.drawImage(bgImage, 0, 0);
-  }
-
-  if (heroReady) {
-    ctx.drawImage(heroImage, hero.x, hero.y);
-  }
-
-  if (monsterReady) {
-    ctx.drawImage(monsterImage, monster.x, monster.y);
-  }
-
-  // Score
-  ctx.fillStyle = "rgb(250, 250, 250)";
-  ctx.font = "24px Helvetica";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-  ctx.fillText("Goblins caught: " + monstersCaught, 32, 32);
+// displayEntryDetails: redirect to "Display Specified Log Entry" page ****************** START
+function displayEntryDetails() {
+  // Redirect to Display Detailed Data Page
+  location.hash = "display-entry";
 }
+// displayEntryDetails: redirect to "Display Specified Log Entry" page ****************** END
 
+// function convertDatemmddyyyy ********************************************************* START
+// convert date format; from native system date format to mm/dd/yyyy format
+function convertDatemmddyyyy(dateObjToConvert) {
+  yyyy = dateObjToConvert.getFullYear();
+  let mm = dateObjToConvert.getMonth() + 1;
+  let dd = dateObjToConvert.getDate() + 1;
+  if (dd < 10) dd = '0' + dd;
+  if (mm < 10) mm = '0' + mm;
+  return (mm + '/' + dd + '/' + yyyy);
+}
+// function convertDatemmddyyyy ********************************************************* END
 
-// The main game loop
-let main = function () {
-  let now = Date.now();
-  let delta = now - then;
-  update(delta / 1000);
-  render();
-  then = now;
-  //  Request to do this again ASAP
-  requestAnimationFrame(main);
-};
+// function calculateBmr **************************************************************** START
+/* BMR equations
+   for woman:  665.00 + (4.35 × weight) + (4.7 × height) - (4.70 × age)			
+   for man:    66.47 + (6.24 × weight) + (12.7 × height) - (6.75 × age)
+*/
+function calculateBmr(gender, age, height, weight) {
+  let bmr = 0;
+  if (gender === "woman") {
+    bmr = 665.00 + (4.35 * weight) + (4.70 * height) - (4.70 * age);
+  } else if (gender === "man") {
+    bmr = 66.47 + (6.24 * weight) + (12.70 * height) - (6.75 * age);
+  } else {
+    bmr = "unable to calculate";
+  }
+  return bmr;
+}
+// function calculateBmr **************************************************************** END
 
-// Reset the game when the player catches a monster
-let reset = function () {
-  hero.x = (canvas.width / 2) -16 ;
-  hero.y = (canvas.height / 2) -16;
+// function calculateTdci *************************************************************** START
+// calculate TDCI as protein calories + carbohydrate calories + fat calories
+function calculateTdci(proteinCalories, carboCalories, fatCalories) {
+  
+  let tdci = proteinCalories + carboCalories + fatCalories;
+console.log("inside calculateTdci function; before return: tdci = ", tdci);
 
-  //Place the monster somewhere on the screen randomly
-  // but not in the hedges, Article in wrong, the 64 needs to be 
-  // hedge 32 + hedge 32 + char 32 = 96
-  monster.x = 32 + (Math.random() * (canvas.width - 96));
-  monster.y = 32 + (Math.random() * (canvas.height - 96));
-};
+  // let tdci = parseInt(proteinCalories) + parseInt(carboCalories) + parseInt(fatCalories);
+  return tdci;
+}
+// function calculateTdci *************************************************************** END
 
-// Let's play this game!
-let then = Date.now();
-reset();
-main();   // call the main game loop
+// function calculateTdee *************************************************************** START
+// calculate TDEE as BMR x PAL
+function calculateTdee(bmr, pal) {
+  let tdee = bmr * pal;
+  return tdee;
+}
+// function calculateTdee *************************************************************** END
+
+// function calculateDebd *************************************************************** START
+// calculate DEBD as TDCI - TDEE
+function calculateDebd(tdci, tdee) {
+  let debd = tdci - tdee;
+  return debd;
+}
+// function calculateDebd *************************************************************** END
